@@ -1,0 +1,27 @@
+# Training configuration for the gorengan detection model.
+# Edit values here; scripts/train.py reads this file and passes them to Ultralytics.
+
+model: yolo26s.pt              # pretrained small model (transfer learning)
+data: dataset_det/data.yaml    # detection dataset (built by scripts/seg_to_det.py)
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # input size; scenes are dense (~16 objects/frame)
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; lower to 8 if you hit CUDA out-of-memory
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+# Dataset is small and training is GPU-bound, so single-process loading is fine.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 0                        # reproducibility
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolo26s_det
