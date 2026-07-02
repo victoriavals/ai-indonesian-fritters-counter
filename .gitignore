@@ -18,7 +18,7 @@ env/
 
 # ===================== Dataset (large — sourced from Roboflow) =====================
 *.zip
-gorengan-conter.yolo26/
+v2-gorengan-counter.yolo26/
 dataset_det/
 datasets/
 data/
