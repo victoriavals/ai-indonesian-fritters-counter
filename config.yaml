@@ -24,4 +24,4 @@ seed: 0                        # reproducibility
 
 # --- output ---
 project: runs                  # results go to runs/<name>/
-name: yolo26s_det
+name: yolo26s_det_v2           # V2 dataset (nc=5: habis/hampir habis/meja/penuh/sedikit)
