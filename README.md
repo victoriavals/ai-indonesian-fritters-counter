@@ -4,19 +4,29 @@ Repository for **training the YOLO model** that detects gorengan (Indonesian fri
 
 ## Model Classes
 
-`nc=4` → `['kosong', 'meja', 'penuh', 'sedikit']` — detects the fill status of the gorengan table/tray.
+`nc=5` → `['habis', 'hampir habis', 'meja', 'penuh', 'sedikit']` — detects the fill status of each tray on the gorengan table. The fill state is bucketed by volume:
+
+| Index | Class | Meaning |
+|------:|-------|---------|
+| 0 | `habis` | empty (0%) |
+| 1 | `hampir habis` | almost empty (1–25%) |
+| 2 | `meja` | the table (1 per frame; region-of-interest anchor) |
+| 3 | `penuh` | full (51–100%) |
+| 4 | `sedikit` | few (26–50%) |
+
+> **V2 replaced the V1 scheme** (`nc=4` = `kosong/meja/penuh/sedikit`). V2 splits the empty→low range into two finer buckets (`habis` + `hampir habis`) and drops `kosong`. The class **indices changed**, so a V1 `best.pt` is not interchangeable with V2 labels — the backend's class mapping must be updated when the V2 model is deployed.
 
 ## Dataset
 
-Roboflow YOLO export lives in `gorengan-conter.yolo26/`:
+Roboflow YOLO (segmentation) export lives in `v2-gorengan-counter.yolo26/`:
 
 | Split | Images |
 |-------|-------:|
-| train | 163 |
-| valid | 16 |
-| test  | 13 |
+| train | 169 |
+| valid | 12 |
+| test  | 10 |
 
-> The dataset (`*.zip` + the `gorengan-conter.yolo26/` folder) and model weights (`*.pt`) are **not committed** to git (see `.gitignore`). Dataset source: Roboflow workspace `naufalfirdaus`.
+> The dataset (`*.zip` + the `v2-gorengan-counter.yolo26/` folder) and model weights (`*.pt`) are **not committed** to git (see `.gitignore`). Dataset source: Roboflow workspace `naufalfirdaus`, project `v2-gorengan-counter`.
 
 ## Setup (Python + uv)
 
@@ -29,20 +39,23 @@ uv sync
 uv run python -c "import ultralytics; print(ultralytics.__version__)"
 ```
 
-## Training (example)
+## Training
+
+The Roboflow export ships **segmentation polygons**, but we train a **detection** model, so
+there are two steps (see `TRAINING.md` for the full rationale):
 
 ```bash
-uv run yolo detect train \
-  data=gorengan-conter.yolo26/data.yaml \
-  model=yolo11n.pt \
-  epochs=100 \
-  imgsz=640
+# 1. Convert polygons → axis-aligned boxes (writes dataset_det/, originals untouched)
+uv run python scripts/seg_to_det.py
+
+# 2. Train from config.yaml (reads dataset_det/data.yaml, enforces GPU)
+uv run python scripts/train.py
 ```
 
-Training results are saved to `runs/detect/train/`. The best model is `runs/detect/train/weights/best.pt`.
+Hyperparameters live in `config.yaml`. Results are saved to `runs/<name>/`; the best model is
+`runs/<name>/weights/best.pt`.
 
 ## After Training
 
-Copy `best.pt` to the backend repo (`backend-ssb-ai/models/best.pt`) for inference. Also record the dataset version, hyperparameters, and metrics (mAP) so the run is reproducible when retraining.
-
-> Note: the Setup & Training steps above describe the intended workflow. The project is not scaffolded yet (`pyproject.toml` does not exist), so `uv sync` will only work after dependencies are set up.
+Copy `best.pt` to the backend repo (`backend-ssb-ai/models/best.pt`) for inference. Also record the
+dataset version, hyperparameters, and metrics (mAP) so the run is reproducible when retraining.
