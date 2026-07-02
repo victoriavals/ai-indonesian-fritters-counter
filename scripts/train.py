@@ -94,6 +94,18 @@ def main() -> None:
         "dataset": cfg.get("data"),
         "config": cfg,
     }
+
+    # Capture the dataset's class scheme + provenance so a run is traceable to its
+    # dataset version (dataset_det/ is reused across versions — the path alone is ambiguous).
+    try:
+        data_yaml = load_config(Path(cfg["data"]))
+        meta["dataset_nc"] = data_yaml.get("nc")
+        meta["dataset_names"] = data_yaml.get("names")
+        first_line = Path(cfg["data"]).read_text(encoding="utf-8").splitlines()[0]
+        if first_line.startswith("# built_from:"):
+            meta["dataset_source"] = first_line.split(":", 1)[1].strip()
+    except Exception:
+        pass
     try:
         meta["metrics"] = results.results_dict
     except Exception:
