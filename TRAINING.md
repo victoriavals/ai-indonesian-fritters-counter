@@ -1,6 +1,11 @@
 # Training Pipeline — Gorengan Counter
 
-**Goal:** for each frame, count the containers on the table by fill state — `kosong` (empty), `sedikit` (few), `penuh` (full).
+**Goal:** for each frame, classify every tray on the table by fill state (by volume) —
+`habis` (0%), `hampir habis` (1–25%), `sedikit` (26–50%), `penuh` (51–100%) — plus `meja`, the table anchor.
+
+> **Dataset V2** (project `v2-gorengan-counter`) replaced V1. V1 used `nc=4` = `kosong/meja/penuh/sedikit`;
+> V2 uses `nc=5` = `habis/hampir habis/meja/penuh/sedikit`, splitting the empty→low range into two finer
+> buckets. The class indices changed, so V1 and V2 weights/labels are **not** interchangeable.
 
 ## Decision: Detection (not Segmentation)
 
@@ -10,7 +15,7 @@ Reasoning:
 - Counting objects only needs **class + location**, not pixel masks. The count is simply the number of boxes per class.
 - Detection is **lighter and faster** to train on an 8 GB GPU and to serve in the backend.
 - No annotation is wasted: polygons are **converted to axis-aligned bounding boxes** in a separate dataset copy (the original stays untouched).
-- `meja` (the table, 1 per frame) is kept (`nc=4`) as a free region-of-interest marker; the backend can use it to count only containers on the table.
+- `meja` (the table, 1 per frame) is kept (`nc=5`) as a free region-of-interest marker; the backend can use it to count only containers on the table.
 
 ## Environment
 
@@ -42,7 +47,7 @@ Reasoning:
 
 ### Phase 5 — Evaluate
 - Validate on the validation and **test** splits.
-- Report **per-class** mAP50 / mAP50-95 (not just the global number — classes are imbalanced; `kosong` is weakest).
+- Report **per-class** mAP50 / mAP50-95 (not just the global number — classes are imbalanced; `habis` is weakest).
 - Inspect the confusion matrix and a batch of predicted images visually.
 - Output: metrics report + sanity-checked predictions.
 
@@ -67,6 +72,6 @@ Reasoning:
 
 ## Notes / known data issues
 - Dataset is YOLO **segmentation** polygons; meja ≈ 6–12 points, containers ≈ 4 points.
-- Class instances (train): `sedikit` 1433, `penuh` 1082, `meja` 163, `kosong` 90 — `kosong` is the weakest class; watch its recall.
-- ~38 degenerate 2-point polygons exist — handled in Phase 2.
-- Validation split is small (16 images) → metrics are a bit noisy; trust the test split too.
+- Class instances (train, V2): `hampir habis` 1091, `sedikit` 823, `penuh` 755, `meja` 169, `habis` 98 — `habis` is the weakest class; watch its recall.
+- V2 has **0 degenerate polygons** (V1 had ~38); `seg_to_det.py` still drops any box below `--min-size` as a safeguard.
+- Splits are small (169 train / 12 valid / 10 test) → metrics are noisy; trust the test split too.
