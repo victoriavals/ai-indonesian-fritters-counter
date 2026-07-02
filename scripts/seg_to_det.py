@@ -1,7 +1,7 @@
 """Convert the YOLO *segmentation* dataset (polygons) into a *detection*
 dataset (axis-aligned bounding boxes).
 
-The Roboflow export `gorengan-conter.yolo26/` stores each object as a polygon:
+The Roboflow export `v2-gorengan-counter.yolo26/` stores each object as a polygon:
 
     <class> x1 y1 x2 y2 x3 y3 ...        (normalized 0..1)
 
@@ -16,7 +16,7 @@ possible, otherwise copied.
 
 Usage:
     uv run python scripts/seg_to_det.py
-    uv run python scripts/seg_to_det.py --src gorengan-conter.yolo26 --dst dataset_det
+    uv run python scripts/seg_to_det.py --src v2-gorengan-counter.yolo26 --dst dataset_det
     uv run python scripts/seg_to_det.py --min-size 0.002   # drop tinier boxes
 """
 
@@ -31,7 +31,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SPLITS = ("train", "valid", "test")
-CLASS_NAMES = ["kosong", "meja", "penuh", "sedikit"]
+# Order MUST match the Roboflow export's data.yaml (index 0..4), or box class ids
+# will be mislabelled. V2 splits fill state into four buckets by volume:
+#   0 habis (0%)  1 hampir habis (1-25%)  2 meja (table)  3 penuh (51-100%)  4 sedikit (26-50%)
+CLASS_NAMES = ["habis", "hampir habis", "meja", "penuh", "sedikit"]
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
@@ -100,10 +103,16 @@ def link_or_copy(src: Path, dst: Path) -> None:
         shutil.copy2(src, dst)
 
 
-def write_data_yaml(dst_root: Path) -> None:
-    """Write a detection-ready data.yaml with an absolute root path."""
+def write_data_yaml(dst_root: Path, src_name: str) -> None:
+    """Write a detection-ready data.yaml with an absolute root path.
+
+    `built_from` records which segmentation export this detection set was derived
+    from, so a training run's metadata can trace back to the dataset version
+    (dataset_det/ is reused across dataset versions and would otherwise be ambiguous).
+    """
     names = ", ".join(f"'{n}'" for n in CLASS_NAMES)
     content = (
+        f"# built_from: {src_name}\n"
         f"path: {dst_root.as_posix()}\n"
         "train: train/images\n"
         "val: valid/images\n"
@@ -116,7 +125,7 @@ def write_data_yaml(dst_root: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert YOLO segmentation labels to detection boxes.")
-    parser.add_argument("--src", default="gorengan-conter.yolo26", help="source dataset dir (relative to repo root)")
+    parser.add_argument("--src", default="v2-gorengan-counter.yolo26", help="source dataset dir (relative to repo root)")
     parser.add_argument("--dst", default="dataset_det", help="output dataset dir (relative to repo root)")
     parser.add_argument("--min-size", type=float, default=0.001, help="drop boxes smaller than this (normalized)")
     args = parser.parse_args()
@@ -163,7 +172,7 @@ def main() -> None:
         counts = ", ".join(f"{CLASS_NAMES[c]}={split_class.get(c, 0)}" for c in range(len(CLASS_NAMES)))
         print(f"[{split:5}] images={split_images:4}  dropped={split_dropped:3}  | {counts}")
 
-    write_data_yaml(dst_root)
+    write_data_yaml(dst_root, args.src)
 
     print("\n=== TOTAL ===")
     for c in range(len(CLASS_NAMES)):
