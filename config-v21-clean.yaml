@@ -1,0 +1,46 @@
+# Training configuration for the V2.1 dataset on the GROUP-AWARE ("clean") split.
+#
+# Identical to config.yaml in every hyperparameter — only `data` and `name` differ. That
+# is deliberate: the two runs must be comparable, so the ONLY variable between them is the
+# train/valid/test partition. Do not tune anything here without re-running the baseline too.
+#
+#   config.yaml            -> dataset_det/       (V2.1 as Roboflow shipped it: random split)
+#   config-v21-clean.yaml  -> dataset_det_clean/ (V2.1 re-split by scene group)
+#
+# Why the second run exists: Roboflow split V2.1 randomly over frames, but the frames are
+# screenshots taken minutes apart from the same recording, so near-identical images landed
+# on both sides of the split. Measured on the shipped split, 36% of test images had a train
+# twin at thumbnail MAE < 5 (random-pair baseline ~38; closest pair 1 min 54 s apart). The
+# clean split groups frames by visual similarity and assigns whole groups, which drops that
+# to 0% with a nearest-neighbour minimum of 12.2. See scripts/make_clean_split.py.
+#
+# Expect LOWER numbers here than from config.yaml. That is the point: these are honest,
+# the baseline's are inflated. Compare this run against production behaviour, not against
+# the baseline's headline mAP.
+#
+# Run with:
+#   uv run python scripts/train.py --config config-v21-clean.yaml
+
+model: yolo26s.pt                    # pretrained small model (transfer learning)
+data: dataset_det_clean/data.yaml    # built by: seg_to_det.py --src v2.1-clean-split.yolo26 --dst dataset_det_clean
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # keep at 640 to stay comparable with the baseline run
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; lower to 8 if you hit CUDA out-of-memory
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 0                        # same seed as the baseline, so the split is the only variable
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolo26s_det_v21_clean    # distinct from yolo26s_det_v21 (baseline) and yolo26s_det_v2 (V2)
