@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Blocks a commit that would leak a credential or track a file that must never be in git.
+#
+# This exists because a hard-coded test password reached three repositories and was found by
+# GitGuardian only AFTER it was pushed. A server-side scanner tells you the secret is already
+# published; this one runs before the commit exists.
+#
+# Enable (once per clone):   git config core.hooksPath .githooks
+# Bypass one commit:         git commit --no-verify
+# Mark a genuine non-secret: append   pragma: allowlist secret   to that line
+set -uo pipefail
+
+fail=0
+
+# ---- 1. Files that must never be tracked, whatever they contain ------------------------
+# .env carries the Railway DATABASE_URL and EZVIZ secrets; branches.json carries RTSP passwords.
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    .env|*/.env|.env.local|*/.env.local|.env.production|*/.env.production)
+      echo "TOLAK  $f — berisi rahasia produksi. Commit .env.example saja." >&2; fail=1 ;;
+    branches.json|*/branches.json)
+      echo "TOLAK  $f — memuat kredensial RTSP kamera." >&2; fail=1 ;;
+    *.pt|*.onnx|*.pth)
+      echo "TOLAK  $f — bobot model tidak boleh masuk git." >&2; fail=1 ;;
+    *.zip|*.mp4|*.mkv)
+      echo "TOLAK  $f — dataset/video tidak boleh masuk git." >&2; fail=1 ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+# ---- 2. Credential-shaped literals in the staged content -------------------------------
+# The matching lives in Python, not grep: the first version of this hook used a grep regex that
+# was case-sensitive and assumed digits came before letters, so it waved through both
+# API_PASSWORD = "..." and a literal ending in digits. Getting this subtly wrong is worse than
+# having no hook at all, because it produces false confidence.
+git diff --cached --unified=0 -- . ':(exclude)*.lock' ':(exclude)package-lock.json' \
+  | python -c '
+import re, sys
+
+ALLOW = "pragma: allowlist secret"
+# A line that reads a value from somewhere is not a hard-coded value.
+INDIRECT = re.compile(r"os\.environ|getenv|process\.env|settings\.|\$\{|\$\(|import |example|placeholder", re.I)
+
+NAMED = re.compile(
+    r"(?i)(password|passwd|secret|api[_-]?key|token)[a-z0-9_]*\s*[\"\x27]?\s*[:=]\s*[\"\x27]([^\"\x27]{8,})[\"\x27]")
+CONN = re.compile(
+    r"(?i)(postgres(ql)?|mysql|mongodb|redis|rtsp|amqp)://[^\s\"\x27]+:[^\s\"\x27@]+@")
+VENDOR = re.compile(
+    r"(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})")
+
+def looks_generated(v: str) -> bool:
+    """A real credential mixes letters and digits, or is simply long. Order-independent —
+    the earlier version required a digit BEFORE a letter and missed obvious secrets."""
+    return (any(c.isdigit() for c in v) and any(c.isalpha() for c in v)) or len(v) >= 24
+
+hits = []
+for raw in sys.stdin:
+    if not raw.startswith("+") or raw.startswith("+++"):
+        continue
+    line = raw[1:].rstrip("\n")
+    if ALLOW in line or INDIRECT.search(line):
+        continue
+    m = NAMED.search(line)
+    if m and looks_generated(m.group(2)):
+        hits.append(("kredensial ditulis langsung di kode", line, m.group(2)))
+        continue
+    if CONN.search(line):
+        hits.append(("URL koneksi memuat kata sandi", line, None))
+        continue
+    m = VENDOR.search(line)
+    if m:
+        hits.append(("kunci penyedia layanan", line, m.group(1)))
+
+for why, line, val in hits[:8]:
+    shown = line.strip()[:100]
+    if val:
+        shown = shown.replace(val, "<DISAMARKAN>")   # never print the secret itself
+    print(f"TOLAK  {why}\n       {shown}", file=sys.stderr)
+sys.exit(1 if hits else 0)
+' || fail=1
+
+if [ "$fail" -ne 0 ]; then
+  {
+    echo
+    echo "Commit dibatalkan. Perbaiki temuan di atas lebih dulu."
+    echo "Gunakan variabel lingkungan, bukan nilai yang ditulis langsung."
+    echo "Bila salah satu memang BUKAN rahasia (mis. masukan uji), tambahkan di akhir barisnya:"
+    echo "    pragma: allowlist secret"
+  } >&2
+  exit 1
+fi
+exit 0
