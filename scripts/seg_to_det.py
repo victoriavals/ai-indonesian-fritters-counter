@@ -128,6 +128,11 @@ def main() -> None:
     parser.add_argument("--src", default="v2-gorengan-counter.yolo26", help="source dataset dir (relative to repo root)")
     parser.add_argument("--dst", default="dataset_det", help="output dataset dir (relative to repo root)")
     parser.add_argument("--min-size", type=float, default=0.001, help="drop boxes smaller than this (normalized)")
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="delete the destination first (required when converting a DIFFERENT source into it)",
+    )
     args = parser.parse_args()
 
     src_root = (REPO_ROOT / args.src).resolve()
@@ -135,6 +140,40 @@ def main() -> None:
 
     if not src_root.exists():
         raise SystemExit(f"Source dataset not found: {src_root}")
+
+    # ------------------------------------------------------------------------------------
+    # Refuse to MIX two dataset versions in one output directory.
+    #
+    # This script never cleared its destination, and Roboflow names files by content hash, so
+    # filenames from different exports never collide. Converting V2.1 into the `dataset_det/`
+    # that already held V2 therefore produced a silently MERGED 852-image set — no warning, no
+    # error, and a training run whose reported image count looked plausible. Worse, the merge
+    # puts V2 test frames into the V2.1 train split, which quietly destroys the very split
+    # separation `make_clean_split.py` exists to protect.
+    #
+    # `data.yaml`'s `# built_from:` line already records the source, so the mismatch is
+    # detectable — it just was not being checked. Same source: incremental re-convert, fine.
+    # Different source: stop and say so.
+    # ------------------------------------------------------------------------------------
+    existing_yaml = dst_root / "data.yaml"
+    if args.clean and dst_root.exists():
+        print(f"[clean] removing {dst_root}")
+        shutil.rmtree(dst_root)
+    elif existing_yaml.exists():
+        first = existing_yaml.read_text(encoding="utf-8").splitlines()[0]
+        previous = first.split(":", 1)[1].strip() if first.startswith("# built_from:") else None
+        if previous is not None and previous != args.src:
+            raise SystemExit(
+                f"REFUSING to write into {dst_root}\n"
+                f"  it was built from : {previous}\n"
+                f"  you are converting: {args.src}\n\n"
+                "Filenames are content hashes, so nothing would be overwritten — the two "
+                "datasets would be silently MERGED and the train/valid/test separation lost.\n"
+                "Use a separate --dst, or pass --clean to delete the destination first."
+            )
+        if previous is None:
+            print(f"[warn] {existing_yaml} has no '# built_from:' line — cannot verify the "
+                  "destination holds the same dataset. Pass --clean if unsure.")
 
     totals: dict[int, int] = {}
     total_dropped = 0
