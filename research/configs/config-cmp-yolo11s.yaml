@@ -1,0 +1,41 @@
+# S2a — BASELINE PEMBANDING: YOLOv11s pada split group-aware (bersih).
+#
+# ATURAN PERBANDINGAN FAIR — jangan dilanggar:
+# Berkas ini adalah salinan byte-per-byte dari config-v21-clean.yaml KECUALI dua kunci:
+# `model` dan `name`. Itu satu-satunya variabel yang boleh berbeda antar run pembanding.
+# Jika Anda mengubah kunci lain di sini, seluruh tabel perbandingan (T8) menjadi tidak sah
+# dan SEMUA run harus diulang.
+#
+# Kenapa run ini ada: paper membutuhkan baseline eksternal. Tanpanya reviewer tidak dapat
+# memisahkan kontribusi protokol pemisahan data dari kontribusi arsitektur model — terutama
+# karena YOLO26 belum punya rujukan peer-review.
+#
+# `yolo11s.pt` akan diunduh otomatis oleh Ultralytics pada run pertama (butuh internet).
+# Parameternya setara YOLO26s (~9,4 M), jadi ini pembanding paling adil dari sisi kapasitas.
+#
+# Jalankan:
+#   uv run python scripts/train.py --config research/configs/config-cmp-yolo11s.yaml
+
+model: yolo11s.pt                    # <-- SATU-SATUNYA perbedaan #1
+data: dataset_det_clean/data.yaml    # WAJIB dataset_det_clean (501/80/80), BUKAN dataset_det
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # keep at 640 to stay comparable with the baseline run
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; if THIS model OOMs, lower to 8 for EVERY model and retrain all
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 0                        # same seed as every other comparison run
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolo11s_det_v21_clean    # <-- SATU-SATUNYA perbedaan #2
