@@ -1,0 +1,40 @@
+# S2b — BASELINE PEMBANDING: YOLOv8s pada split group-aware (bersih).
+#
+# ATURAN PERBANDINGAN FAIR — jangan dilanggar:
+# Salinan byte-per-byte dari config-v21-clean.yaml KECUALI `model` dan `name`.
+# Mengubah kunci lain membatalkan tabel T8 dan mewajibkan SEMUA run diulang.
+#
+# Kenapa YOLOv8s: arsitektur YOLO yang paling banyak disitir di literatur, sehingga angkanya
+# paling mudah ditempatkan pembaca terhadap penelitian lain. YOLOv8s ~11,2 M parameter,
+# sedikit lebih besar dari YOLO26s (9,47 M) — sebutkan selisih ini di pembahasan T8, jangan
+# disamarkan.
+#
+# `yolov8s.pt` diunduh otomatis oleh Ultralytics pada run pertama (butuh internet).
+# CATATAN: nama berkas YOLOv8 memakai "v" (`yolov8s.pt`), sedangkan YOLO11 tidak (`yolo11s.pt`).
+#
+# Jalankan:
+#   uv run python scripts/train.py --config research/configs/config-cmp-yolov8s.yaml
+
+model: yolov8s.pt                    # <-- SATU-SATUNYA perbedaan #1
+data: dataset_det_clean/data.yaml    # WAJIB dataset_det_clean (501/80/80), BUKAN dataset_det
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # keep at 640 to stay comparable with the baseline run
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; if THIS model OOMs, lower to 8 for EVERY model and retrain all
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 0                        # same seed as every other comparison run
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolov8s_det_v21_clean    # <-- SATU-SATUNYA perbedaan #2
