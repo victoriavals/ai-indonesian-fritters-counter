@@ -1,0 +1,39 @@
+# S2c — MODEL RINGAN: YOLO26n pada split group-aware (bersih).
+#
+# ATURAN PERBANDINGAN FAIR — jangan dilanggar:
+# Salinan byte-per-byte dari config-v21-clean.yaml KECUALI `model` dan `name`.
+#
+# Kenapa run ini ada (argumen deployment, bukan sekadar kelengkapan):
+# server produksi `cctv-ai` TIDAK punya GPU. YOLO26s terukur 196 ms/frame di CPU (178 ms median
+# pada 8 thread). Run ini menjawab pertanyaan yang akan ditanyakan reviewer terapan: apakah
+# varian nano cukup akurat untuk dipakai, dan berapa penghematan latensinya? Pasangkan hasilnya
+# dengan T9 (benchmark latensi), bukan hanya T8.
+#
+# `yolo26n.pt` SUDAH ADA di root repo (5,5 MB) — tidak perlu unduhan.
+#
+# Jalankan:
+#   uv run python scripts/train.py --config research/configs/config-cmp-yolo26n.yaml
+
+model: yolo26n.pt                    # <-- SATU-SATUNYA perbedaan #1
+data: dataset_det_clean/data.yaml    # WAJIB dataset_det_clean (501/80/80), BUKAN dataset_det
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # keep at 640 to stay comparable with the baseline run
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; if THIS model OOMs, lower to 8 for EVERY model and retrain all
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 0                        # same seed as every other comparison run
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolo26n_det_v21_clean    # <-- SATU-SATUNYA perbedaan #2
