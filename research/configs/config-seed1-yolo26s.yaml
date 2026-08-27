@@ -1,0 +1,41 @@
+# S5a — ULANGAN SEED: YOLO26s pada split bersih, seed 1.
+#
+# PERHATIAN — aturan di sini BERBEDA dari config-cmp-*.yaml.
+# Pada run pembanding antar-model, yang bervariasi adalah `model`. Pada run ini yang bervariasi
+# adalah `seed`. Salinan byte-per-byte dari config-v21-clean.yaml KECUALI `seed` dan `name`;
+# `model` HARUS tetap yolo26s.pt.
+#
+# Kenapa run ini ada — ini menjawab kelemahan statistik yang paling mudah diserang reviewer:
+# MODELS.md mencatat mAP50 per-epoch berayun 0,784-0,954 dengan stdev 0,050 setelah epoch 60.
+# Artinya selisih split acak vs bersih (-0,047 mAP50) berada DI DALAM rentang derau itu dan
+# BELUM aman diklaim dari satu run tunggal. Dengan seed 0/1/2 Anda dapat melaporkan
+# mean +- stdev dan menjalankan uji berpasangan, sehingga klaim -0,047 punya dasar.
+#
+# (Selisih uji adil +0,313 jauh di luar derau dan sudah aman tanpa ini.)
+#
+# Jalankan:
+#   uv run python scripts/train.py --config research/configs/config-seed1-yolo26s.yaml
+
+model: yolo26s.pt                    # TETAP sama - jangan diubah
+data: dataset_det_clean/data.yaml    # WAJIB dataset_det_clean (501/80/80), BUKAN dataset_det
+
+# --- schedule ---
+epochs: 200                    # small dataset -> train long, early stopping decides when to stop
+patience: 50                   # stop if no validation improvement for this many epochs
+imgsz: 640                     # keep at 640 to stay comparable with the baseline run
+
+# --- hardware (RTX 4060 Ti, 8 GB) ---
+device: 0                      # GPU index (0 = the RTX). train.py enforces a real CUDA device.
+batch: 16                      # fits 8 GB; lower to 8 if you hit CUDA out-of-memory
+# On Windows, workers>0 + cache=true can deadlock the dataloader at startup.
+cache: false
+workers: 0
+
+# --- augmentation / optimization ---
+close_mosaic: 10               # disable mosaic for the last N epochs (cleaner convergence)
+cos_lr: true                   # cosine learning-rate decay
+seed: 1                        # <-- SATU-SATUNYA perbedaan #1 (baseline memakai 0)
+
+# --- output ---
+project: runs                  # results go to runs/<name>/
+name: yolo26s_det_v21_clean_seed1    # <-- SATU-SATUNYA perbedaan #2
