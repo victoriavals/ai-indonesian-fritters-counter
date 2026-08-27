@@ -1,0 +1,5 @@
+model,bobot,params,gflops,size_mb,gpu_ms_median,gpu_fps,cpu_ms_median,cpu_fps,cpu_rss_mb
+YOLO26s,runs\yolo26s_det_v21_clean\weights\best.pt,"9,467,115",20.5,19.4,37.3,26.8,195.1,5.1,1516
+YOLOv11s,runs\yolo11s_det_v21_clean\weights\best.pt,"9,414,735",21.3,18.3,39.2,25.5,190.1,5.3,1636
+YOLOv8s,runs\yolov8s_det_v21_clean\weights\best.pt,"11,127,519",28.4,21.5,36.5,27.4,194.9,5.1,1832
+YOLO26n,runs\yolo26n_det_v21_clean\weights\best.pt,"2,375,811",5.2,5.1,42.2,23.7,114.3,8.7,1844
