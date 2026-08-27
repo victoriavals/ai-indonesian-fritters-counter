@@ -1,0 +1,6 @@
+run,prioritas,status,durasi_jam,epoch
+yolo11s_det_v21_clean,p0,SELESAI,1.617,136
+yolov8s_det_v21_clean,p0,SELESAI,2.018,173
+yolo26n_det_v21_clean,p1,SELESAI,0.879,73
+yolo26s_det_v21_clean_seed1,p1,SELESAI,1.962,152
+yolo26s_det_v21_clean_seed2,p1,SELESAI,1.287,102
